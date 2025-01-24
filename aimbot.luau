@@ -188,7 +188,7 @@ local GetClosestPlayer = function()
 		RequiredDistance = Environment.FOVSettings.Enabled and Environment.FOVSettings.Radius or 2000
 
 		for _, Value in next, GetPlayers(Players) do
-			local Character = Workspace.Male
+			local Character = game.workspace.Male
 			local Humanoid = Character and FindFirstChildOfClass(Character, "Humanoid")
 
 			if Value ~= LocalPlayer and not tablefind(Environment.Blacklisted, __index(Value, "Name")) and Character and FindFirstChild(Character, LockPart) and Humanoid then
