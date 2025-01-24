@@ -180,45 +180,39 @@ local CancelLock = function()
 	end
 end
 
-local GetClosestPlayer = function()
+local GetClosestObject = function()
     local Settings = Environment.Settings
     local LockPart = Settings.LockPart
 
     if not Environment.Locked then
         RequiredDistance = Environment.FOVSettings.Enabled and Environment.FOVSettings.Radius or 2000
 
-        -- Find all objects named "Male" in the workspace
-        for _, Value in next, workspace:GetChildren() do
-            if Value:IsA("Model") and Value.Name == "Male" then
-                local Character = Value
-                local Head = FindFirstChild(Character, "Head")
+        -- Iterate through the workspace and search for the target models (e.g., "Male.Head")
+        for _, model in next, workspace:GetDescendants() do
+            if model.Name == "Head" and model.Parent.Name == "Male" then  -- Ensure it’s the right model
+                local PartPosition = model.Position
 
-                if Head then
-                    local PartPosition = __index(Head, "Position")
-
-                    if Settings.WallCheck then
-                        local BlacklistTable = GetDescendants(__index(LocalPlayer, "Character"))
-
-                        for _, Descendant in next, GetDescendants(Character) do
-                            BlacklistTable[#BlacklistTable + 1] = Descendant
-                        end
-
-                        if #GetPartsObscuringTarget(Camera, {PartPosition}, BlacklistTable) > 0 then
-                            continue
-                        end
+                if Settings.WallCheck then
+                    -- Check for wall obstructions
+                    local BlacklistTable = GetDescendants(__index(LocalPlayer, "Character"))
+                    for _, Value in next, GetDescendants(model.Parent) do
+                        BlacklistTable[#BlacklistTable + 1] = Value
                     end
-
-                    local Vector, OnScreen, Distance = WorldToViewportPoint(Camera, PartPosition)
-                    Vector = ConvertVector(Vector)
-                    Distance = (GetMouseLocation(UserInputService) - Vector).Magnitude
-
-                    if Distance < RequiredDistance and OnScreen then
-                        RequiredDistance, Environment.Locked = Distance, Value
+                    if #GetPartsObscuringTarget(Camera, {PartPosition}, BlacklistTable) > 0 then
+                        continue
                     end
+                end
+
+                local Vector, OnScreen, Distance = WorldToViewportPoint(Camera, PartPosition)
+                Vector = ConvertVector(Vector)
+                Distance = (GetMouseLocation(UserInputService) - Vector).Magnitude
+
+                if Distance < RequiredDistance and OnScreen then
+                    RequiredDistance, Environment.Locked = Distance, model.Parent
                 end
             end
         end
-    elseif (GetMouseLocation(UserInputService) - ConvertVector(WorldToViewportPoint(Camera, __index(__index(__index(Environment.Locked, "Character"), LockPart), "Position")))).Magnitude > RequiredDistance then
+    elseif (GetMouseLocation(UserInputService) - ConvertVector(WorldToViewportPoint(Camera, Environment.Locked.Head.Position))).Magnitude > RequiredDistance then
         CancelLock()
     end
 end
@@ -235,58 +229,27 @@ local Load = function()
 	end
 	]]
 
-	ServiceConnections.RenderSteppedConnection = Connect(__index(RunService, Environment.DeveloperSettings.UpdateMode), function()
-		local OffsetToMoveDirection, LockPart = Settings.OffsetToMoveDirection, Settings.LockPart
+ServiceConnections.RenderSteppedConnection = Connect(__index(RunService, Environment.DeveloperSettings.UpdateMode), function()
+    if Running and Settings.Enabled then
+        GetClosestObject()
 
-		if FOVSettings.Enabled and Settings.Enabled then
-			for Index, Value in next, FOVSettings do
-				if Index == "Color" then
-					continue
-				end
+        if Environment.Locked then
+            local LockedPosition_Vector3 = Environment.Locked.Head.Position
+            local LockedPosition = WorldToViewportPoint(Camera, LockedPosition_Vector3)
 
-				if pcall(getrenderproperty, FOVCircle, Index) then
-					setrenderproperty(FOVCircle, Index, Value)
-					setrenderproperty(FOVCircleOutline, Index, Value)
-				end
-			end
-
-			setrenderproperty(FOVCircle, "Color", (Environment.Locked and FOVSettings.LockedColor) or FOVSettings.RainbowColor and GetRainbowColor() or FOVSettings.Color)
-			setrenderproperty(FOVCircleOutline, "Color", FOVSettings.RainbowOutlineColor and GetRainbowColor() or FOVSettings.OutlineColor)
-
-			setrenderproperty(FOVCircleOutline, "Thickness", FOVSettings.Thickness + 1)
-			setrenderproperty(FOVCircle, "Position", GetMouseLocation(UserInputService))
-			setrenderproperty(FOVCircleOutline, "Position", GetMouseLocation(UserInputService))
-		else
-			setrenderproperty(FOVCircle, "Visible", false)
-			setrenderproperty(FOVCircleOutline, "Visible", false)
-		end
-
-		if Running and Settings.Enabled then
-			GetClosestPlayer()
-
-			Offset = OffsetToMoveDirection and __index(FindFirstChildOfClass(__index(Environment.Locked, "Character"), "Humanoid"), "MoveDirection") * (mathclamp(Settings.OffsetIncrement, 1, 30) / 10) or Vector3zero
-
-			if Environment.Locked then
-				local LockedPosition_Vector3 = __index(__index(Environment.Locked, "Character")[LockPart], "Position")
-				local LockedPosition = WorldToViewportPoint(Camera, LockedPosition_Vector3 + Offset)
-
-				if Environment.Settings.LockMode == 2 then
-					mousemoverel((LockedPosition.X - GetMouseLocation(UserInputService).X) / Settings.Sensitivity2, (LockedPosition.Y - GetMouseLocation(UserInputService).Y) / Settings.Sensitivity2)
-				else
-					if Settings.Sensitivity > 0 then
-						Animation = TweenService:Create(Camera, TweenInfonew(Environment.Settings.Sensitivity, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {CFrame = CFramenew(Camera.CFrame.Position, LockedPosition_Vector3)})
-						Animation:Play()
-					else
-						__newindex(Camera, "CFrame", CFramenew(Camera.CFrame.Position, LockedPosition_Vector3 + Offset))
-					end
-
-					__newindex(UserInputService, "MouseDeltaSensitivity", 0)
-				end
-
-				setrenderproperty(FOVCircle, "Color", FOVSettings.LockedColor)
-			end
-		end
-	end)
+            if Environment.Settings.LockMode == 2 then
+                mousemoverel((LockedPosition.X - GetMouseLocation(UserInputService).X) / Settings.Sensitivity2, (LockedPosition.Y - GetMouseLocation(UserInputService).Y) / Settings.Sensitivity2)
+            else
+                if Settings.Sensitivity > 0 then
+                    Animation = TweenService:Create(Camera, TweenInfonew(Environment.Settings.Sensitivity, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {CFrame = CFramenew(Camera.CFrame.Position, LockedPosition_Vector3)})
+                    Animation:Play()
+                else
+                    __newindex(Camera, "CFrame", CFramenew(Camera.CFrame.Position, LockedPosition_Vector3))
+                end
+            end
+        end
+    end
+end)
 
 	ServiceConnections.InputBeganConnection = Connect(__index(UserInputService, "InputBegan"), function(Input)
 		local TriggerKey, Toggle = Settings.TriggerKey, Settings.Toggle
